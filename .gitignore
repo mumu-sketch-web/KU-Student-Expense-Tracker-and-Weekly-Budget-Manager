@@ -1,3 +1,9 @@
+ HEAD
+
+
+build/
+*.exe
+
 # Prerequisites
 *.d
 
@@ -67,3 +73,4 @@ vcpkg_installed/
 # test output & cache
 Testing/
 .cache/
+ 09ec81dc352e3e8bb75012b889cc59829e89ad36

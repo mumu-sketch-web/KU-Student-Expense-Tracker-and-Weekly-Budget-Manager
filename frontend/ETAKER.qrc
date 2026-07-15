@@ -1,0 +1,14 @@
+<RCC>
+    <qresource>
+        <file>ETAKER.qmlproject</file>
+        <file>ETAKER/Constants.qml</file>
+        <file>ETAKER/EventListModel.qml</file>
+        <file>ETAKER/EventListSimulator.qml</file>
+        <file>ETAKER/qmldir</file>
+        <file>ETAKERContent/.ui.qml</file>
+        <file>ETAKERContent/App.qml</file>
+        <file>ETAKERContent/Dashboard.ui.qml</file>
+        <file>ETAKERContent/Loginpage.ui.qml</file>
+        <file>qtquickcontrols2.conf</file>
+    </qresource>
+</RCC>

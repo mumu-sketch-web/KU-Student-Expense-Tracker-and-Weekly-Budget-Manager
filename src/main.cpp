@@ -1,12 +1,15 @@
-#include <iostream>
-#include "../include/User.h"
+#include <QApplication>
+#include <QDir>
+#include "MainWindow.h"
 
-int main() {
-
-    User user("Shravik");
-
-    std::cout << "Expense Tracker Started" << std::endl;
-    std::cout << user.getName() << std::endl;
-
-    return 0;
+int main(int argc, char *argv[]) {
+    QApplication app(argc, argv);
+    
+    // Ensure the "data" directory exists so Mumuchhyu's CSV saving works smoothly
+    QDir().mkpath("data");
+    
+    MainWindow window;
+    window.show();
+    
+    return app.exec();
 }

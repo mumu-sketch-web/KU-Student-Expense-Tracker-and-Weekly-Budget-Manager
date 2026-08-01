@@ -25,6 +25,19 @@ void deleteExpense(std::vector<Expense>& list, int id) {
     }
 }
 
+bool editExpense(std::vector<Expense>& list, int id, const std::string& cat, const std::string& desc, double amt, const std::string& date) {
+    for (auto& item : list) {
+        if (item.id == id) {
+            item.category = cat;
+            item.description = desc;
+            item.amount = amt;
+            item.date = date.empty() ? getTodayDateString() : date;
+            return true;
+        }
+    }
+    return false;
+}
+
 std::string getTodayDateString() {
     std::time_t t = std::time(nullptr);
     std::tm tmStruct{};

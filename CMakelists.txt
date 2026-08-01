@@ -18,6 +18,7 @@ add_executable(${PROJECT_NAME}
     src/Budget.cpp
     src/AlertSystem.cpp
     src/FileManager.cpp
+    src/ActivityLog.cpp
 )
 
 target_link_libraries(${PROJECT_NAME} PRIVATE Qt${QT_VERSION_MAJOR}::Widgets)

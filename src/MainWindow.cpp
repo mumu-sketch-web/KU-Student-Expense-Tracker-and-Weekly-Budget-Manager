@@ -16,9 +16,11 @@
 
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     setWindowTitle("KU Student Expense Tracker");
-    resize(820, 680);
+    resize(820, 760);
     setupUI();
     loadFromFile(expenseList, currentBudget, nextId);
+    activityLog = loadActivityLog();
+    selectedDay = QDate::currentDate();
     budgetInput->setValue(currentBudget.limit);
     recalculateTotal(currentBudget, expenseList);
     refreshDashboard();
@@ -65,7 +67,7 @@ QWidget* MainWindow::createDashboardTab() {
     budgetLayout->addWidget(alertStatusLabel);
     mainLayout->addWidget(budgetGroup);
 
-    QGroupBox* addGroup = new QGroupBox("Add New Expense");
+    QGroupBox* addGroup = new QGroupBox("Add / Edit Expense");
     QGridLayout* addLayout = new QGridLayout(addGroup);
     addLayout->addWidget(new QLabel("Category:"), 0, 0);
     categoryDropdown = new QComboBox();
@@ -73,6 +75,7 @@ QWidget* MainWindow::createDashboardTab() {
     addLayout->addWidget(categoryDropdown, 0, 1);
     addLayout->addWidget(new QLabel("Description:"), 0, 2);
     descriptionInput = new QLineEdit();
+    descriptionInput->setPlaceholderText("(optional)");
     addLayout->addWidget(descriptionInput, 0, 3);
 
     addLayout->addWidget(new QLabel("Amount:"), 1, 0);
@@ -88,9 +91,15 @@ QWidget* MainWindow::createDashboardTab() {
     dateInput->setMaximumDate(QDate::currentDate()); // expenses can't be logged in the future
     addLayout->addWidget(dateInput, 1, 3);
 
-    QPushButton* addBtn = new QPushButton("➕ Add Expense");
-    connect(addBtn, &QPushButton::clicked, this, &MainWindow::handleAddExpense);
-    addLayout->addWidget(addBtn, 2, 0, 1, 4);
+    addOrUpdateButton = new QPushButton("➕ Add Expense");
+    connect(addOrUpdateButton, &QPushButton::clicked, this, &MainWindow::handleAddOrUpdateExpense);
+    addLayout->addWidget(addOrUpdateButton, 2, 0, 1, 3);
+
+    cancelEditButton = new QPushButton("✖ Cancel Edit");
+    cancelEditButton->setVisible(false);
+    connect(cancelEditButton, &QPushButton::clicked, this, &MainWindow::resetExpenseForm);
+    addLayout->addWidget(cancelEditButton, 2, 3);
+
     mainLayout->addWidget(addGroup);
 
     expenseTable = new QTableWidget();
@@ -98,12 +107,19 @@ QWidget* MainWindow::createDashboardTab() {
     expenseTable->setHorizontalHeaderLabels({"ID", "Date", "Category", "Description", "Amount"});
     expenseTable->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
     expenseTable->setSelectionBehavior(QAbstractItemView::SelectRows);
+    expenseTable->setSelectionMode(QAbstractItemView::ExtendedSelection); // multi-select for bulk delete
     expenseTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
     mainLayout->addWidget(expenseTable);
 
-    deleteButton = new QPushButton("🗑️ Delete Selected Expense");
+    QHBoxLayout* actionRow = new QHBoxLayout();
+    editButton = new QPushButton("✏️ Edit Selected");
+    connect(editButton, &QPushButton::clicked, this, &MainWindow::handleEditExpense);
+    actionRow->addWidget(editButton);
+
+    deleteButton = new QPushButton("🗑️ Delete Selected");
     connect(deleteButton, &QPushButton::clicked, this, &MainWindow::handleDeleteExpense);
-    mainLayout->addWidget(deleteButton);
+    actionRow->addWidget(deleteButton);
+    mainLayout->addLayout(actionRow);
 
     return tab;
 }
@@ -122,21 +138,12 @@ QWidget* MainWindow::createHistoryTab() {
     layout->addLayout(filterLayout);
 
     historyTable = new QTableWidget();
-    historyTable->setColumnCount(5);
-    historyTable->setHorizontalHeaderLabels({"ID", "Date", "Category", "Description", "Amount"});
+    historyTable->setColumnCount(7);
+    historyTable->setHorizontalHeaderLabels({"Timestamp", "Action", "ID", "Date", "Category", "Description", "Amount"});
     historyTable->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
     historyTable->setSelectionBehavior(QAbstractItemView::SelectRows);
     historyTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
-    historyTable->setSortingEnabled(true);
     layout->addWidget(historyTable);
-
-    historyTotalLabel = new QLabel("Total: Rs. 0.00");
-    historyTotalLabel->setStyleSheet("font-weight: bold; font-size: 14px;");
-    layout->addWidget(historyTotalLabel);
-
-    historyDeleteButton = new QPushButton("🗑️ Delete Selected");
-    connect(historyDeleteButton, &QPushButton::clicked, this, &MainWindow::handleDeleteHistoryExpense);
-    layout->addWidget(historyDeleteButton);
 
     return tab;
 }
@@ -147,6 +154,7 @@ QWidget* MainWindow::createAnalysisTab() {
 
     analysisCalendar = new QCalendarWidget();
     connect(analysisCalendar, &QCalendarWidget::currentPageChanged, this, &MainWindow::handleCalendarPageChanged);
+    connect(analysisCalendar, &QCalendarWidget::clicked, this, &MainWindow::handleCalendarDateClicked);
     layout->addWidget(analysisCalendar);
 
     analysisTotalLabel = new QLabel("Total Spent This Month: Rs. 0.00");
@@ -161,6 +169,17 @@ QWidget* MainWindow::createAnalysisTab() {
     categoryBreakdownTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
     layout->addWidget(categoryBreakdownTable);
 
+    selectedDayLabel = new QLabel("Click a date above to see that day's expenses.");
+    selectedDayLabel->setStyleSheet("font-weight: bold;");
+    layout->addWidget(selectedDayLabel);
+
+    dayExpenseTable = new QTableWidget();
+    dayExpenseTable->setColumnCount(3);
+    dayExpenseTable->setHorizontalHeaderLabels({"Category", "Description", "Amount"});
+    dayExpenseTable->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
+    dayExpenseTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    layout->addWidget(dayExpenseTable);
+
     return tab;
 }
 
@@ -170,38 +189,85 @@ void MainWindow::handleSetBudget() {
     saveToFile(expenseList, currentBudget);
 }
 
-void MainWindow::handleAddExpense() {
-    if (descriptionInput->text().trimmed().isEmpty()) return;
-    addExpense(expenseList, nextId,
-               categoryDropdown->currentText().toStdString(),
-               descriptionInput->text().toStdString(),
-               amountInput->value(),
-               dateInput->date().toString("yyyy-MM-dd").toStdString());
+void MainWindow::handleAddOrUpdateExpense() {
+    std::string desc = descriptionInput->text().trimmed().toStdString();
+    std::string cat = categoryDropdown->currentText().toStdString();
+    double amt = amountInput->value();
+    std::string date = dateInput->date().toString("yyyy-MM-dd").toStdString();
+
+    if (editingExpenseId != -1) {
+        editExpense(expenseList, editingExpenseId, cat, desc, amt, date);
+        for (const auto& item : expenseList) {
+            if (item.id == editingExpenseId) {
+                logActivity(activityLog, "Edited", item);
+                break;
+            }
+        }
+        resetExpenseForm();
+    } else {
+        addExpense(expenseList, nextId, cat, desc, amt, date);
+        logActivity(activityLog, "Added", expenseList.back());
+        descriptionInput->clear();
+        amountInput->setValue(1.0);
+        dateInput->setDate(QDate::currentDate());
+    }
+
+    recalculateTotal(currentBudget, expenseList);
+    refreshDashboard();
+    refreshHistory();
+    refreshAnalysis();
+    saveToFile(expenseList, currentBudget);
+}
+
+void MainWindow::handleEditExpense() {
+    int currentRow = expenseTable->currentRow();
+    if (currentRow < 0) return;
+
+    int id = expenseTable->item(currentRow, 0)->text().toInt();
+    for (const auto& item : expenseList) {
+        if (item.id == id) {
+            editingExpenseId = id;
+            categoryDropdown->setCurrentText(QString::fromStdString(item.category));
+            descriptionInput->setText(QString::fromStdString(item.description));
+            amountInput->setValue(item.amount);
+            dateInput->setDate(QDate::fromString(QString::fromStdString(item.date), "yyyy-MM-dd"));
+            addOrUpdateButton->setText("✔️ Update Expense");
+            cancelEditButton->setVisible(true);
+            break;
+        }
+    }
+}
+
+void MainWindow::resetExpenseForm() {
+    editingExpenseId = -1;
+    categoryDropdown->setCurrentIndex(0);
     descriptionInput->clear();
     amountInput->setValue(1.0);
     dateInput->setDate(QDate::currentDate());
-    recalculateTotal(currentBudget, expenseList);
-    refreshDashboard();
-    refreshHistory();
-    refreshAnalysis();
-    saveToFile(expenseList, currentBudget);
+    addOrUpdateButton->setText("➕ Add Expense");
+    cancelEditButton->setVisible(false);
 }
 
 void MainWindow::handleDeleteExpense() {
-    int currentRow = expenseTable->currentRow();
-    if (currentRow < 0) return;
-    deleteExpense(expenseList, expenseTable->item(currentRow, 0)->text().toInt());
-    recalculateTotal(currentBudget, expenseList);
-    refreshDashboard();
-    refreshHistory();
-    refreshAnalysis();
-    saveToFile(expenseList, currentBudget);
-}
+    QModelIndexList selected = expenseTable->selectionModel()->selectedRows();
+    if (selected.isEmpty()) return;
 
-void MainWindow::handleDeleteHistoryExpense() {
-    int currentRow = historyTable->currentRow();
-    if (currentRow < 0) return;
-    deleteExpense(expenseList, historyTable->item(currentRow, 0)->text().toInt());
+    std::vector<int> idsToDelete;
+    for (const auto& index : selected) {
+        idsToDelete.push_back(expenseTable->item(index.row(), 0)->text().toInt());
+    }
+
+    for (int id : idsToDelete) {
+        for (const auto& item : expenseList) {
+            if (item.id == id) {
+                logActivity(activityLog, "Deleted", item);
+                break;
+            }
+        }
+        deleteExpense(expenseList, id);
+        if (id == editingExpenseId) resetExpenseForm(); // don't leave the form pointing at a deleted expense
+    }
+
     recalculateTotal(currentBudget, expenseList);
     refreshDashboard();
     refreshHistory();
@@ -218,6 +284,11 @@ void MainWindow::handleCalendarPageChanged(int year, int month) {
     Q_UNUSED(year);
     Q_UNUSED(month);
     refreshAnalysis();
+}
+
+void MainWindow::handleCalendarDateClicked(const QDate& date) {
+    selectedDay = date;
+    refreshDayView(date);
 }
 
 void MainWindow::refreshDashboard() {
@@ -265,30 +336,49 @@ void MainWindow::refreshHistory() {
     populateHistoryMonthDropdown();
     QString selectedMonth = historyMonthFilter->currentData().toString();
 
-    std::vector<Expense> filtered;
-    for (const auto& item : expenseList) {
-        if (selectedMonth.isEmpty() || QString::fromStdString(item.date).startsWith(selectedMonth)) {
-            filtered.push_back(item);
+    std::vector<ActivityLogEntry> filtered;
+    for (const auto& entry : activityLog) {
+        if (selectedMonth.isEmpty() || QString::fromStdString(entry.date).startsWith(selectedMonth)) {
+            filtered.push_back(entry);
         }
     }
-    std::sort(filtered.begin(), filtered.end(), [](const Expense& a, const Expense& b) {
-        return a.date > b.date;
-    });
+    std::reverse(filtered.begin(), filtered.end()); // newest activity first
 
-    historyTable->setSortingEnabled(false);
     historyTable->setRowCount(0);
-    double total = 0.0;
     for (int i = 0; i < static_cast<int>(filtered.size()); ++i) {
         historyTable->insertRow(i);
-        historyTable->setItem(i, 0, new QTableWidgetItem(QString::number(filtered[i].id)));
-        historyTable->setItem(i, 1, new QTableWidgetItem(QString::fromStdString(filtered[i].date)));
-        historyTable->setItem(i, 2, new QTableWidgetItem(QString::fromStdString(filtered[i].category)));
-        historyTable->setItem(i, 3, new QTableWidgetItem(QString::fromStdString(filtered[i].description)));
-        historyTable->setItem(i, 4, new QTableWidgetItem(QString("Rs. %1").arg(filtered[i].amount, 0, 'f', 2)));
-        total += filtered[i].amount;
+        historyTable->setItem(i, 0, new QTableWidgetItem(QString::fromStdString(filtered[i].timestamp)));
+        historyTable->setItem(i, 1, new QTableWidgetItem(QString::fromStdString(filtered[i].action)));
+        historyTable->setItem(i, 2, new QTableWidgetItem(QString::number(filtered[i].expenseId)));
+        historyTable->setItem(i, 3, new QTableWidgetItem(QString::fromStdString(filtered[i].date)));
+        historyTable->setItem(i, 4, new QTableWidgetItem(QString::fromStdString(filtered[i].category)));
+        historyTable->setItem(i, 5, new QTableWidgetItem(QString::fromStdString(filtered[i].description)));
+        historyTable->setItem(i, 6, new QTableWidgetItem(QString("Rs. %1").arg(filtered[i].amount, 0, 'f', 2)));
     }
-    historyTable->setSortingEnabled(true);
-    historyTotalLabel->setText(QString("Total: Rs. %1").arg(total, 0, 'f', 2));
+}
+
+void MainWindow::refreshDayView(const QDate& date) {
+    if (!date.isValid()) return;
+    std::string dateKey = date.toString("yyyy-MM-dd").toStdString();
+
+    std::vector<Expense> dayItems;
+    for (const auto& item : expenseList) {
+        if (item.date == dateKey) dayItems.push_back(item);
+    }
+
+    selectedDayLabel->setText(QString("Expenses on %1:").arg(date.toString("MMMM d, yyyy")));
+
+    dayExpenseTable->setRowCount(0);
+    for (int i = 0; i < static_cast<int>(dayItems.size()); ++i) {
+        dayExpenseTable->insertRow(i);
+        dayExpenseTable->setItem(i, 0, new QTableWidgetItem(QString::fromStdString(dayItems[i].category)));
+        dayExpenseTable->setItem(i, 1, new QTableWidgetItem(QString::fromStdString(dayItems[i].description)));
+        dayExpenseTable->setItem(i, 2, new QTableWidgetItem(QString("Rs. %1").arg(dayItems[i].amount, 0, 'f', 2)));
+    }
+    if (dayItems.empty()) {
+        dayExpenseTable->insertRow(0);
+        dayExpenseTable->setItem(0, 0, new QTableWidgetItem("No expenses on this date"));
+    }
 }
 
 void MainWindow::refreshAnalysis() {
@@ -328,6 +418,13 @@ void MainWindow::refreshAnalysis() {
         categoryBreakdownTable->insertRow(0);
         categoryBreakdownTable->setItem(0, 0, new QTableWidgetItem("No expenses this month"));
         categoryBreakdownTable->setItem(0, 1, new QTableWidgetItem(""));
+    }
+
+    if (selectedDay.year() == visibleDate.year() && selectedDay.month() == visibleDate.month()) {
+        refreshDayView(selectedDay);
+    } else {
+        selectedDayLabel->setText("Click a date above to see that day's expenses.");
+        dayExpenseTable->setRowCount(0);
     }
 }
 

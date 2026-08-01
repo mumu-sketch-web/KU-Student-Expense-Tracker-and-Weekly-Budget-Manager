@@ -13,6 +13,7 @@
 #include <vector>
 #include "Expense.h"
 #include "Budget.h"
+#include "ActivityLog.h"
 
 class MainWindow : public QMainWindow {
     Q_OBJECT
@@ -22,12 +23,13 @@ public:
     ~MainWindow();
 
 private slots:
-    void handleAddExpense();
+    void handleAddOrUpdateExpense();
+    void handleEditExpense();
     void handleDeleteExpense();
     void handleSetBudget();
-    void handleDeleteHistoryExpense();
     void handleHistoryFilterChanged(int index);
     void handleCalendarPageChanged(int year, int month);
+    void handleCalendarDateClicked(const QDate& date);
 
 private:
     void setupUI();
@@ -38,11 +40,15 @@ private:
     void refreshDashboard();
     void refreshHistory();
     void refreshAnalysis();
+    void refreshDayView(const QDate& date);
     void populateHistoryMonthDropdown();
+    void resetExpenseForm();
 
     std::vector<Expense> expenseList;
+    std::vector<ActivityLogEntry> activityLog;
     Budget currentBudget;
     int nextId = 1;
+    int editingExpenseId = -1; // -1 = adding a new expense, otherwise the id being edited
 
     QTabWidget* tabWidget;
 
@@ -56,18 +62,22 @@ private:
     QLineEdit* descriptionInput;
     QDoubleSpinBox* amountInput;
     QDateEdit* dateInput;
+    QPushButton* addOrUpdateButton;
+    QPushButton* cancelEditButton;
 
     QTableWidget* expenseTable;
+    QPushButton* editButton;
     QPushButton* deleteButton;
 
-    // --- History tab ---
+    // --- History tab (read-only activity log) ---
     QComboBox* historyMonthFilter;
     QTableWidget* historyTable;
-    QLabel* historyTotalLabel;
-    QPushButton* historyDeleteButton;
 
     // --- Monthly Analysis tab ---
     QCalendarWidget* analysisCalendar;
     QLabel* analysisTotalLabel;
     QTableWidget* categoryBreakdownTable;
+    QLabel* selectedDayLabel;
+    QTableWidget* dayExpenseTable;
+    QDate selectedDay;
 };

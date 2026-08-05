@@ -4,7 +4,7 @@
 #include <iomanip>
 
 void addExpense(std::vector<Expense>& list, int& nextId, const std::string& cat, const std::string& desc, double amt, const std::string& date) {
-    // Create a new expense item and push it into the global vector
+    
     Expense newItem;
     newItem.id = nextId++;
     newItem.category = cat;
@@ -16,7 +16,7 @@ void addExpense(std::vector<Expense>& list, int& nextId, const std::string& cat,
 }
 
 void deleteExpense(std::vector<Expense>& list, int id) {
-    // Loop through and remove the item that matches the target ID
+    
     for (auto it = list.begin(); it != list.end(); ++it) {
         if (it->id == id) {
             list.erase(it);

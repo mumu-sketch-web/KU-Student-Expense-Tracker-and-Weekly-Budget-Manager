@@ -29,7 +29,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
 }
 
 MainWindow::~MainWindow() {
-    // Keeps the compiler happy when closing the window
+    
 }
 
 void MainWindow::setupUI() {
@@ -385,7 +385,7 @@ void MainWindow::refreshAnalysis() {
     QDate visibleDate(analysisCalendar->yearShown(), analysisCalendar->monthShown(), 1);
     std::string monthKey = visibleDate.toString("yyyy-MM").toStdString();
 
-    // Clear old highlighting, then highlight every day in the visible month that has an expense
+    
     QTextCharFormat defaultFormat;
     analysisCalendar->setDateTextFormat(QDate(), defaultFormat);
 
@@ -428,5 +428,5 @@ void MainWindow::refreshAnalysis() {
     }
 }
 
-// Crucial fix: explicitly compile the meta-object code right here
+
 #include "moc_MainWindow.cpp"

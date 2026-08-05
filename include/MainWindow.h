@@ -48,7 +48,7 @@ private:
     std::vector<ActivityLogEntry> activityLog;
     Budget currentBudget;
     int nextId = 1;
-    int editingExpenseId = -1; // -1 = adding a new expense, otherwise the id being edited
+    int editingExpenseId = -1; 
 
     QTabWidget* tabWidget;
 

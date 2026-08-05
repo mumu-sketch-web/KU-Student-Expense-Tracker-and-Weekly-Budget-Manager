@@ -10,10 +10,10 @@ void saveToFile(const std::vector<Expense>& list, const Budget& budget) {
         return;
     }
     
-    // Line 1: Save the budget limit
+    
     out << budget.limit << "\n";
     
-    // Remaining lines: Save each expense (id,category,description,amount,date)
+    
     for (const auto& item : list) {
         out << item.id << "," << item.category << "," << item.description << "," << item.amount << "," << item.date << "\n";
     }
@@ -23,13 +23,13 @@ void saveToFile(const std::vector<Expense>& list, const Budget& budget) {
 void loadFromFile(std::vector<Expense>& list, Budget& budget, int& nextId) {
     std::ifstream in("data/expenses.csv");
     if (!in.is_open()) {
-        return; // File doesn't exist yet on first launch, do nothing
+        return; 
     }
     
     list.clear();
     std::string line;
     
-    // Read Line 1: Budget limit
+   
     if (std::getline(in, line)) {
         try {
             budget.limit = std::stod(line);
@@ -38,7 +38,7 @@ void loadFromFile(std::vector<Expense>& list, Budget& budget, int& nextId) {
         }
     }
     
-    // Read Remaining lines: Expenses
+    
     while (std::getline(in, line)) {
         if (line.empty()) continue;
         std::stringstream ss(line);
@@ -58,7 +58,7 @@ void loadFromFile(std::vector<Expense>& list, Budget& budget, int& nextId) {
             }
             list.push_back({id, cat, desc, amt, dateStr});
             
-            // Ensure nextId is always higher than the largest loaded ID
+            
             if (id >= nextId) {
                 nextId = id + 1;
             }
